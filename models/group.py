@@ -21,6 +21,7 @@ class Group(db.Model):
 
     id = db.Column(db.Integer, primary_key=True, comment='群聊ID')
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='群主ID')
+    number = db.Column(db.String(10),nullable=False,unique=True)
     name = db.Column(db.String(64), nullable=False, comment='群名称')
     avatar = db.Column(db.String(500), default=None, comment='群头像')
     description = db.Column(db.String(200), default=None, comment='群简介')

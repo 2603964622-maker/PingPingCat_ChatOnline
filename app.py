@@ -1,10 +1,17 @@
 from flask import Flask
 import config
-from exts import db, migrate,mail,cache
+from exts import db, migrate,mail,cache,socketio
 from models import *
 from commands import init_business_role
+# 导入蓝图
 from blueprints.user import bp as user_bp
 from blueprints.upload import bp as upload_bp
+from blueprints.private import bp as private_bp
+from blueprints.search import bp as search_bp
+from blueprints.channels import bp as channels_bp
+from blueprints.groups import bp as groups_bp
+
+
 from chatonline_celery import make_celery
 import hooks
 app = Flask(__name__)
@@ -16,6 +23,7 @@ db.init_app(app)
 mail.init_app(app)
 migrate.init_app(app, db)
 cache.init_app(app)
+socketio.init_app(app)
 
 
 #设置flask cmd 命令
@@ -24,6 +32,10 @@ app.cli.command('init-business-role')(init_business_role)
 # 注册蓝图
 app.register_blueprint(user_bp)
 app.register_blueprint(upload_bp)
+app.register_blueprint(private_bp)
+app.register_blueprint(search_bp)
+app.register_blueprint(channels_bp)
+app.register_blueprint(groups_bp)
 
 # 添加狗子
 app.before_request(hooks.before_request)

@@ -11,6 +11,6 @@ from models.user import User
 def before_request():
     if session.get('user_id') is None:
         return redirect(url_for('user.login'))
-    user = User.query.filter_by(user_id=session.get('user_id')).first()
+    user = User.query.filter_by(id=session.get('user_id')).first()
     setattr(g,'user',user)
     return None

@@ -1,5 +1,9 @@
 from functools import wraps
+from typing import Any, Callable
+
 from flask import redirect,url_for,g,jsonify,request
+from werkzeug import Response
+
 
 def login_required(func):
     @wraps(func)

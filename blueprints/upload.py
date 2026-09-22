@@ -6,6 +6,8 @@ from utils import save_upload_file,delete_old_file,get_file_size,generate_filena
 from decorators import login_required
 bp = Blueprint('upload',__name__,url_prefix='/upload')
 
+#TODO : 生产环境中 记得把上传文件改为对象存储，开发环境先存储到项目文件夹中的/static中
+
 @bp.route('/avatar',methods=['POST'])
 @login_required
 def upload_avatar():

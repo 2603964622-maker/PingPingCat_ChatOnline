@@ -4,17 +4,31 @@ import uuid
 from datetime import datetime
 from flask import current_app
 from models.user import User
+from models.group import Group
+from models.channel import Channel
+import random
 
-def generate_unique_number():
-    POOL=['0','1','2','3','4','5','6','7','8','9']
-    number = "".join(random.sample(POOL, 10))
-    status=True
-    while status:
-        if User.query.filter_by(number=number).first():
-           number = "".join(random.sample(POOL, 10))
+def generate_unique_number(type):
+    POOL = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+    while True:
+        # 每次生成纯数字，并拼上前缀
+        digits = "".join(random.sample(POOL, k=10))
+        full_number = type + digits
+        # 按类型查对应表（判断查到的结果是否为空）
+        if type == "user_":
+            exists = User.query.filter_by(number=full_number).first()
+        elif type == "group_":
+            exists = Group.query.filter_by(number=full_number).first()
+        elif type == "channel_":
+            exists = Channel.query.filter_by(number=full_number).first()
         else:
-            status = False
-    return number
+            # 非法类型，直接返回 None 或抛异常
+            return None
+        # 核心：没查到才退出，查到了就继续循环重生成
+        if not exists:
+            break
+    return full_number
+
 
 ######################################################
 # 允许的文件扩展名

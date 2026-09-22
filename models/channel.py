@@ -23,8 +23,9 @@ class ChannelRole(db.Model):
 class Channel(db.Model):
     __tablename__ = 'channels'
 
-    id = db.Column(db.Integer, primary_key=True, comment='频道ID')
+    id = db.Column(db.Integer, primary_key=True, comment='频道ID',autoincrement=True)
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='创建者')
+    number = db.Column(db.String(10),nullable=False,unique=True,comment="频道号码")
     name = db.Column(db.String(64), nullable=False, comment='频道名称')
     description = db.Column(db.String(200), default=None, comment='频道描述')
     avatar = db.Column(db.String(500), default=None, comment='频道图标')
@@ -42,7 +43,7 @@ class Channel(db.Model):
 class ChannelMember(db.Model):
     __tablename__ = 'channel_members'
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True,autoincrement=True)
     channel_id = db.Column(db.Integer, db.ForeignKey('channels.id'), nullable=False, comment='频道ID')
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='用户ID')
     role = db.Column(db.SmallInteger, default=3, comment='1=主理人 2=副主理人 3=订阅者')

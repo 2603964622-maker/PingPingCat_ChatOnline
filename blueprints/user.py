@@ -15,7 +15,7 @@ def register():
         data = request.get_json()
         email = data.get('email')
         code = data.get('email_code')
-        mail_code = cache.get(email)  #cache.get()直接填写键值，不需要加引号 .cache.get("email")❌
+        mail_code = cache.get(f"res:{email}")  #cache.get()直接填写键值，不需要加引号 .cache.get("email")❌
         if code != mail_code:
             return jsonify(
                 {
@@ -23,9 +23,9 @@ def register():
                     "msg":"邮箱验证码错误"
                 }
             ),400
-        number = generate_unique_number()
+        number = generate_unique_number(type="user_")
         nickname = data.get('nickname')
-        avatar_url = f"https://robohash.org/{email}?set=set4&size=200×200"
+        avatar_url = f"https://robohash.org/{email}?set=set4&size=200x200"
         password = data.get('password')
         user = User(number,email,nickname,avatar_url,password)
         db.session.add(user)
@@ -75,7 +75,7 @@ def login():
                 "nickname": user.nickname,
                 "avatar": user.avatar,
                 "status": user.status,
-                "signature":user.signature
+                "signature":user.Signature
             }
             }),200
     except Exception as e:
