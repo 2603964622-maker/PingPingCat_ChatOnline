@@ -33,8 +33,11 @@ class Channel(db.Model):
     status = db.Column(db.SmallInteger, default=1, comment='1=正常 0=封禁')
     created_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), comment='创建时间')
 
-    members = db.relationship('ChannelMember', backref='channel', lazy='dynamic')
-    posts = db.relationship('ChannelPost', backref='channel', lazy='dynamic')
+    owner = db.relationship('User', foreign_keys=[owner_id])
+
+    members = db.relationship('ChannelMember', back_populates='channel', lazy='dynamic')
+    posts = db.relationship('ChannelPost', back_populates='channel', lazy='joined')
+    channel_files = db.relationship('ChannelFile', back_populates='channel')
 
     def __repr__(self):
         return f"<Channel {self.name} id={self.id}>"
@@ -54,6 +57,9 @@ class ChannelMember(db.Model):
         db.UniqueConstraint('channel_id', 'user_id', name='uk_channel_member'),
     )
 
+    user = db.relationship('User', back_populates='channel_memberships')
+    channel = db.relationship('Channel', back_populates='members')
+
     def __repr__(self):
         return f"<ChannelMember c={self.channel_id} u={self.user_id}>"
 
@@ -61,7 +67,7 @@ class ChannelMember(db.Model):
 class ChannelPost(db.Model):
     __tablename__ = 'channel_posts'
 
-    id = db.Column(db.Integer, primary_key=True, comment='帖子ID')
+    id = db.Column(db.Integer, primary_key=True, comment='帖子ID',autoincrement=True)
     channel_id = db.Column(db.Integer, db.ForeignKey('channels.id'), nullable=False, comment='频道ID')
     author_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='作者ID')
     title = db.Column(db.String(100), default=None, comment='标题')
@@ -70,8 +76,10 @@ class ChannelPost(db.Model):
     status = db.Column(db.SmallInteger, default=1, comment='1=正常 0=删除')
     created_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), comment='发布时间')
 
-    comments = db.relationship('ChannelComment', backref='post', lazy='dynamic')
-    likes = db.relationship('ChannelLike', backref='post', lazy='dynamic')
+    channel = db.relationship('Channel', back_populates='posts')
+    channel_files = db.relationship('ChannelFile', back_populates='posts',lazy='joined')
+    comments = db.relationship('ChannelComment', back_populates='post', lazy='dynamic')
+    likes = db.relationship('ChannelLike', back_populates='post', lazy='dynamic')
 
     def __repr__(self):
         return f"<ChannelPost {self.id} c={self.channel_id}>"
@@ -81,18 +89,20 @@ class ChannelComment(db.Model):
     __tablename__ = 'channel_comments'
 
     id = db.Column(db.Integer, primary_key=True)
+    channel_id = db.Column(db.Integer, db.ForeignKey('channels.id'), nullable=False,comment='关联频道id')
     post_id = db.Column(db.Integer, db.ForeignKey('channel_posts.id'), nullable=False, comment='帖子ID')
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='评论者')
     content = db.Column(db.String(500), nullable=False, comment='评论内容')
     created_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), comment='评论时间')
 
+    post = db.relationship('ChannelPost', back_populates='comments')
+
     def __repr__(self):
         return f"<ChannelComment p={self.post_id}>"
 
-
 class ChannelLike(db.Model):
+    """暂未列入项目中，频道帖子不需要点赞记录"""
     __tablename__ = 'channel_likes'
-
     id = db.Column(db.Integer, primary_key=True, comment='点赞ID')
     post_id = db.Column(db.Integer, db.ForeignKey('channel_posts.id'), nullable=False, comment='帖子ID')
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='用户ID')
@@ -101,6 +111,8 @@ class ChannelLike(db.Model):
     __table_args__ = (
         db.UniqueConstraint('post_id', 'user_id', name='uk_post_like'),
     )
+
+    post = db.relationship('ChannelPost', back_populates='likes')
 
     def __repr__(self):
         return f"<ChannelLike p={self.post_id} u={self.user_id}>"

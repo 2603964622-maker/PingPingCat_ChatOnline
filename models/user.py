@@ -1,5 +1,3 @@
-from celery.worker.strategy import default
-
 from exts import db
 from datetime import datetime,timezone
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -18,8 +16,9 @@ class User(db.Model):
     deleted_at = db.Column(db.DateTime, default=None) # 软删除标记,不为NULL代表已注销 ,注销后不得物理删库，只是标记,聊天记录还可以关联
 
     # 关系
-    sent_messages = db.relationship('Message', backref='sender', lazy='dynamic', foreign_keys='Message.sender_id')
-    owned_groups = db.relationship('Group', backref='owner', lazy='dynamic')
+    sent_messages = db.relationship('Message', back_populates='sender', lazy='dynamic', foreign_keys='Message.sender_id')
+    owned_groups = db.relationship('Group', back_populates='owner', lazy='dynamic')
+    channel_memberships = db.relationship('ChannelMember', back_populates='user', lazy='dynamic')
 
     def __repr__(self):
         return f"<User {self.number}>"

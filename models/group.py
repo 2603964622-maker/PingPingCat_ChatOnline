@@ -1,6 +1,7 @@
 from enum import Enum
 
-from sqlalchemy import false
+from celery.worker.strategy import default
+from sqlalchemy import false, true
 
 from exts import db
 from datetime import datetime,timezone
@@ -16,10 +17,13 @@ class GroupRole(db.Model):
     name = db.Column(db.String(30),nullable=false,unique=True)
     display_name = db.Column(db.String(30))  #用于存权限枚举的中文
 
+    #关系
+    members = db.relationship('GroupMember', back_populates='member_role', lazy='dynamic')
+
 class Group(db.Model):
     __tablename__ = 'groups'
 
-    id = db.Column(db.Integer, primary_key=True, comment='群聊ID')
+    id = db.Column(db.Integer, primary_key=True, comment='群聊ID',autoincrement=True)
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='群主ID')
     number = db.Column(db.String(10),nullable=False,unique=True)
     name = db.Column(db.String(64), nullable=False, comment='群名称')
@@ -29,9 +33,12 @@ class Group(db.Model):
     status = db.Column(db.SmallInteger, default=1, comment='1=正常 0=解散')
     created_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), comment='创建时间')
 
-    # 关系已在 User 中通过 backref 建立，此处可省略
-    members = db.relationship('GroupMember', backref='group', lazy='dynamic')
-    messages = db.relationship('GroupMessage', backref='group', lazy='dynamic')
+    owner = db.relationship('User', back_populates='owned_groups', foreign_keys=[owner_id])
+    group_files = db.relationship('GroupFile', back_populates='group', lazy='joined')
+
+    # 关系
+    members = db.relationship('GroupMember', back_populates='group', lazy='dynamic')
+    messages = db.relationship('GroupMessage', back_populates='group', lazy='dynamic')
 
     def __repr__(self):
         return f"<Group {self.name} id={self.id}>"
@@ -40,10 +47,10 @@ class Group(db.Model):
 class GroupMember(db.Model):
     __tablename__ = 'group_members'
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True,autoincrement=True)
     group_id = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=False, comment='群ID')
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='用户ID')
-    role = db.Column(db.SmallInteger, default=2, comment='1=群主 2=管理员 3=普通成员')
+    role = db.Column(db.SmallInteger, default=3, comment='1=群主 2=管理员 3=普通成员')
     nickname = db.Column(db.String(64), default=None, comment='群内昵称')
     mute_until = db.Column(db.DateTime, default=None, comment='禁言截止时间')
     joined_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), comment='加入时间')
@@ -52,6 +59,9 @@ class GroupMember(db.Model):
         db.UniqueConstraint('group_id', 'user_id', name='uk_group_member'),
     )
 
+    group = db.relationship('Group', back_populates='members')
+    member_role = db.relationship('GroupRole', back_populates='members')
+
     def __repr__(self):
         return f"<GroupMember g={self.group_id} u={self.user_id}>"
 
@@ -59,13 +69,15 @@ class GroupMember(db.Model):
 class GroupMessage(db.Model):
     __tablename__ = 'group_messages'
 
-    id = db.Column(db.Integer, primary_key=True, comment='群内消息编号')
+    id = db.Column(db.Integer, primary_key=True, comment='群内消息编号',autoincrement=True)
     group_id = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=False, comment='群ID')
     sender_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='发送者ID')
     content = db.Column(db.Text, nullable=False, comment='消息内容')
     msg_type = db.Column(db.SmallInteger, default=1, comment='1=文本 2=图片 3=文件')
     deleted_at = db.Column(db.DateTime, default=None, comment='软删除标记')
     created_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), comment='发送时间')
+
+    group = db.relationship('Group', back_populates='messages')
 
     def __repr__(self):
         return f"<GroupMessage {self.id} g={self.group_id}>"
@@ -74,7 +86,7 @@ class GroupMessage(db.Model):
 class GroupAnnouncement(db.Model):
     __tablename__ = 'group_announcements'
 
-    id = db.Column(db.Integer, primary_key=True, comment='公告ID')
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True,comment='公告ID')
     group_id = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=False, comment='群ID')
     publisher_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='发布者')
     content = db.Column(db.Text, nullable=False, comment='公告内容')
@@ -82,3 +94,16 @@ class GroupAnnouncement(db.Model):
 
     def __repr__(self):
         return f"<GroupAnnouncement g={self.group_id}>"
+
+class AnnouncementUserIsRead(db.Model):
+    """
+    插入用户已读的记录 即可
+    """
+    __tablename__ = 'group_announcement_user_is_read'
+    id = db.Column(db.Integer, primary_key=True,autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='用户ID')
+    group_id = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=False, comment='群ID')
+    announcement_id = db.Column(db.Integer, db.ForeignKey('group_announcements.id'), nullable=False)
+
+    def __repr__(self):
+        return f"<AnnouncementUserIsRead g={self.group_id}>"

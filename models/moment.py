@@ -18,9 +18,9 @@ class Moment(db.Model):
     status = db.Column(db.SmallInteger, default=1, comment='1=正常 0=删除')
     created_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), comment='发布时间')
 
-    medias = db.relationship('MomentMedia', backref='moment', lazy='dynamic')
-    likes = db.relationship('MomentLike', backref='moment', lazy='dynamic')
-    comments = db.relationship('MomentComment', backref='moment', lazy='dynamic')
+    medias = db.relationship('MomentMedia', back_populates='moment', lazy='dynamic')
+    likes = db.relationship('MomentLike', back_populates='moment', lazy='dynamic')
+    comments = db.relationship('MomentComment', back_populates='moment', lazy='dynamic')
 
     def __repr__(self):
         return f"<Moment {self.id} u={self.user_id}>"
@@ -34,6 +34,8 @@ class MomentMedia(db.Model):
     url = db.Column(db.String(500), nullable=False, comment='资源地址')
     media_type = db.Column(db.SmallInteger, default=1, comment='1=图片 2=视频')
     sort_order = db.Column(db.Integer, default=0, comment='排序')
+
+    moment = db.relationship('Moment', back_populates='medias')
 
     def __repr__(self):
         return f"<MomentMedia m={self.moment_id}>"
@@ -51,6 +53,8 @@ class MomentLike(db.Model):
         db.UniqueConstraint('moment_id', 'user_id', name='uk_moment_like'),
     )
 
+    moment = db.relationship('Moment', back_populates='likes')
+
     def __repr__(self):
         return f"<MomentLike m={self.moment_id} u={self.user_id}>"
 
@@ -64,6 +68,8 @@ class MomentComment(db.Model):
     reply_to = db.Column(db.Integer, default=None, comment='回复的评论ID')
     content = db.Column(db.String(500), nullable=False, comment='评论内容')
     created_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), comment='评论时间')
+
+    moment = db.relationship('Moment', back_populates='comments')
 
     def __repr__(self):
         return f"<MomentComment m={self.moment_id}>"
