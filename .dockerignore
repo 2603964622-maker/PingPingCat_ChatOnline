@@ -1,0 +1,11 @@
+# 构建上下文排除：只列项目里实际存在、且不需要打进镜像的东西
+.venv
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.git
+.idea
+.env
+Dockerfile
+.dockerignore
+_tmp_*.py

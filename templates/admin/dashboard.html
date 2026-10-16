@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatOnline · 管理端看板</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="tb-brand"><span class="dot">管</span> <span class="tb-brand-name">PingPingCat</span>管理端</div>
+    <div class="tb-right">
+      <span>{{ admin.nickname or admin.username }}{% if admin.role == 1 %}（超管）{% endif %}</span>
+      <button class="theme-btn" id="themeBtn" type="button" title="长按切换深浅色">☀</button>
+      <a href="/" target="_blank"><button class="link-btn">前台</button></a>
+      <button class="link-btn" id="logoutBtn">退出登录</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="dash-grid">
+      <aside class="dash-side">
+        <div class="toolbar">
+          <span class="muted">统计区间</span>
+          <select class="mini" id="daysSel">
+            <option value="7">近 7 天</option>
+            <option value="14">近 14 天</option>
+            <option value="30">近 30 天</option>
+          </select>
+          <button class="link-btn" id="refreshBtn">刷新</button>
+        </div>
+
+        <div class="sec-title"><span class="bar"></span>数据总览</div>
+        <div class="cards" id="cards"></div>
+      </aside>
+
+      <div class="dash-main">
+        <div class="sec-title"><span class="bar"></span>增长趋势</div>
+        <div class="grid-2">
+          <div class="chart-box">
+            <div class="ch-head"><h3>用户 / 群聊 / 频道 / 帖子 · 每日新增</h3><div class="legend" id="growthLegend"></div></div>
+            <div class="cv"><canvas id="growthChart"></canvas></div>
+          </div>
+          <div class="chart-box">
+            <div class="ch-head"><h3>文件上传 / 删除 · 每日对比 <small class="fsz" id="fileSizeTag"></small></h3><div class="legend" id="fileLegend"></div></div>
+            <div class="cv"><canvas id="fileChart"></canvas></div>
+          </div>
+        </div>
+
+        <div class="sec-title"><span class="bar"></span>运营审核</div>
+        <div class="dash-tabs" id="dashTabs">
+          <button class="dash-tab on" data-pane="reports" type="button">举报审核</button>
+          <button class="dash-tab" data-pane="feedbacks" type="button">用户想法 · 反馈</button>
+          <button class="dash-tab" data-pane="announcements" type="button">全站公告</button>
+        </div>
+
+        <div class="dash-pane on" data-pane="reports">
+          <div class="toolbar">
+            <span class="chip on" data-st="">全部</span>
+            <span class="chip" data-st="0">待处理</span>
+            <span class="chip" data-st="1">已处理</span>
+            <span class="chip" data-st="2">已驳回</span>
+            <span class="muted" id="repCount" style="margin-left:auto"></span>
+          </div>
+          <div id="reports"></div>
+        </div>
+
+        <div class="dash-pane" data-pane="feedbacks">
+          <div class="toolbar">
+            <span class="chip fb-chip on" data-fbst="">全部</span>
+            <span class="chip fb-chip" data-fbst="0">待处理</span>
+            <span class="chip fb-chip" data-fbst="1">已回复</span>
+            <span class="chip fb-chip" data-fbst="2">已归档</span>
+            <span class="muted" id="fbCount" style="margin-left:auto"></span>
+          </div>
+          <div id="feedbacks"></div>
+        </div>
+
+        <div class="dash-pane" data-pane="announcements">
+          <div class="toolbar">
+            <button class="d-btn primary" id="annNew" type="button">＋ 发布公告</button>
+            <span class="muted" id="annCount" style="margin-left:auto"></span>
+          </div>
+          <div id="announcements"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 举报详情弹窗（点记录打开：展示完整详情 + 处置 / 驳回操作） -->
+  <div class="mask" id="reportMask">
+    <div class="dialog">
+      <h3>举报详情 #<span id="dRid"></span> <span id="dStatus"></span></h3>
+      <div class="kv" id="dDetail"></div>
+      <div id="dActions">
+        <div class="row" style="margin-top:14px">
+          <label class="check"><input type="checkbox" id="dDisband"> 强制解散该群聊 / 频道</label>
+        </div>
+        <div class="row">
+          <label class="check"><input type="checkbox" id="dBanOwner"> 封禁责任人（群主 / 频道主 / 被举报用户）</label>
+        </div>
+        <div class="row" id="dBanDaysRow" hidden>
+          <label>封禁时长（天）· 0 表示永久</label>
+          <input type="number" id="dBanDays" min="0" step="1" value="7">
+        </div>
+        <div class="row">
+          <label>处理备注（可选）</label>
+          <textarea id="dNote" rows="2" placeholder="记录处置 / 驳回说明"></textarea>
+        </div>
+      </div>
+      <div class="adm-err" id="dErr"></div>
+      <div class="foot">
+        <button class="d-btn" id="dCancel">关闭</button>
+        <button class="d-btn" id="dReject" hidden>驳回</button>
+        <button class="d-btn danger" id="dConfirm" hidden>确认处置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 回复想法弹窗 -->
+  <div class="mask" id="fbMask">
+    <div class="dialog">
+      <h3>想法详情 #<span id="fFid"></span></h3>
+      <div class="kv" id="fDetail"></div>
+      <div class="row" style="margin-top:14px">
+        <label>回复内容（同时写入用户的站内通知）</label>
+        <textarea id="fReply" rows="3" placeholder="谢谢你的想法，我们计…"></textarea>
+      </div>
+      <div class="adm-err" id="fErr"></div>
+      <div class="foot">
+        <button class="d-btn" id="fCancel">取消</button>
+        <button class="d-btn" id="fArchive">仅归档</button>
+        <button class="d-btn primary" id="fConfirm">回复并通知用户</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 发布全站公告弹窗 -->
+  <div class="mask" id="annMask">
+    <div class="dialog">
+      <h3>发布全站公告</h3>
+      <div class="row"><label>标题（必填）</label><input type="text" id="aTitle" maxlength="120" placeholder="例如：系统维护通知"></div>
+      <div class="row"><label>正文（可选）</label><textarea id="aContent" rows="4" placeholder="公告内容…"></textarea></div>
+      <div class="row">
+        <label>附图 / 视频（最多 9 个）· 发布后立即推送给所有在线用户，离线用户下次进入自动补发</label>
+        <div class="adm-media" id="aMedia"></div>
+        <button class="d-btn" id="aAdd" type="button">＋ 选择图片 / 视频</button>
+        <input type="file" id="aFile" accept="image/*,video/*" multiple hidden>
+      </div>
+      <div class="adm-err" id="aErr"></div>
+      <div class="foot">
+        <button class="d-btn" id="aCancel">取消</button>
+        <button class="d-btn primary" id="aConfirm">发布并推送</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 公告详情弹窗（点记录打开：展示完整详情 + 下架 / 删除操作） -->
+  <div class="mask" id="annDetailMask">
+    <div class="dialog">
+      <h3>公告详情 #<span id="anId"></span> <span id="anStatus"></span></h3>
+      <div class="kv" id="anDetail"></div>
+      <div class="adm-err" id="anErr"></div>
+      <div class="foot">
+        <button class="d-btn" id="anClose">关闭</button>
+        <button class="d-btn" id="anToggle">下架</button>
+        <button class="d-btn danger" id="anDel">删除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 实时在线名单弹窗（点看板“实时在线”卡片打开；数据源是 SocketIO 进程内连接注册表，与卡片数字同源） -->
+  <div class="mask" id="onMask">
+    <div class="dialog">
+      <h3>实时在线 <span class="muted" id="onSum"></span></h3>
+      <div class="us-list" id="onList"></div>
+      <div class="foot">
+        <button class="d-btn" id="onRefresh" type="button">刷新</button>
+        <button class="d-btn" id="onClose">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="lightbox" id="lightbox"><img id="lbImg" alt=""></div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const $ = s => document.querySelector(s);
+    const $$ = s => Array.from(document.querySelectorAll(s));
+    let growthChart = null, fileChart = null;
+    let curStatus = '';
+
+    function toast(msg, type) {
+      const t = $('#toast'); t.textContent = msg; t.className = 'toast show' + (type ? ' ' + type : '');
+      clearTimeout(t._h); t._h = setTimeout(() => t.className = 'toast', 2200);
+    }
+    async function api(url, opts) {
+      const res = await fetch(url, Object.assign({ credentials: 'same-origin' }, opts || {}));
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) { throw new Error('响应异常，可能登录已失效'); }
+      const r = await res.json();
+      if (r.code === 401) { location.href = '/admin/login'; throw new Error('未登录'); }
+      return r;
+    }
+    const post = (url, body) => api(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+    const esc = s => (s == null ? '' : String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])));
+    const TT = { user: '用户', group: '群聊', channel: '频道' };
+    const ST = { 0: '待处理', 1: '已处理', 2: '已驳回' };
+
+    /* ---------------- 统计 ---------------- */
+    function card(k, v, sub, cls, attrs) {
+      return '<div class="card ' + (cls || '') + '"' + (attrs ? ' ' + attrs : '') + '"><div class="k">' + k + '</div><div class="v">' + v + (sub ? ' <small>' + sub + '</small>' : '') + '</div></div>';
+    }
+    /* 管理端头像也走缩略图档位（/upload/thumb 免鉴权，所以 admin 登录态下能正常出图）；
+       非 http 的站内路径与 robohash 外链原样返回 */
+    function thumbOf(u, size) {
+      if (!u || !/^https?:/i.test(u) || /robohash\.org/i.test(u)) return u || '';
+      return '/upload/thumb?s=' + (size || 400) + '&u=' + encodeURIComponent(u);
+    }
+    function fmtDur(sec) {
+      sec = Math.max(0, sec | 0);
+      const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+      return h ? h + ' 小时 ' + m + ' 分' : (m ? m + ' 分 ' + s + ' 秒' : s + ' 秒');
+    }
+    /* 上传总量：默认 MB，超过 1024MB 按 GB */
+    function fmtSize(b) {
+      b = b || 0; const MB = 1048576;
+      if (b >= MB * 1024) return (b / (MB * 1024)).toFixed(2) + ' GB';
+      return (b / MB).toFixed(2) + ' MB';
+    }
+    /* 环比文案：本期新增 + 较上一周期涨/跌 */
+    function deltaStr(dl) {
+      if (!dl) return '';
+      const cur = dl.cur || 0, pct = dl.pct || 0;
+      let arrow, cls;
+      if (dl.prev === 0 && cur > 0) { arrow = '新增'; cls = 'up'; }
+      else if (pct > 0) { arrow = '↑' + pct + '%'; cls = 'up'; }
+      else if (pct < 0) { arrow = '↓' + Math.abs(pct) + '%'; cls = 'down'; }
+      else { arrow = '持平'; cls = 'flat'; }
+      return '本期 +' + cur + ' · 环比 <span class="' + cls + '">' + arrow + '</span>';
+    }
+    async function loadStats() {
+      const days = $('#daysSel').value;
+      const r = await api('/admin/api/stats?days=' + days);
+      if (r.code !== 0) { toast(r.msg || '统计失败', 'err'); return; }
+      const d = r.data, t = d.totals;
+      lastStats = d;
+      const o = d.online || { avg_seconds: 0, total_seconds: 0, users: 0, online_now: 0 };
+      const gd = d.growth.delta || {};
+      $('#cards').innerHTML =
+        card('用户总数', t.users, deltaStr(gd.users), 'accent') +
+        card('平均在线时长', fmtDur(o.avg_seconds), o.users + ' 人有时长记录', 'accent') +
+        card('实时在线', o.online_now, '', 'clickable', 'id="cardOnline" title="点击查看当前在线用户"') +
+        card('群聊总数', t.groups, deltaStr(gd.groups)) +
+        card('频道总数', t.channels, deltaStr(gd.channels)) +
+        card('帖子总数', t.posts, deltaStr(gd.posts)) +
+        card('待处理举报', t.pending_reports, '共 ' + t.total_reports + ' 条', t.pending_reports > 0 ? 'warn' : '') +
+        card('待处理想法', t.pending_feedbacks, '共 ' + t.total_feedbacks + ' 条', t.pending_feedbacks > 0 ? 'warn' : '') +
+        card('在投公告', t.published_announcements, '条');
+      $('#fileSizeTag').textContent = '· 上传总量 ' + fmtSize((d.files || {}).size_bytes);
+      const co = $('#cardOnline');
+      if (co) co.addEventListener('click', openOnline);
+      drawGrowth(d.growth);
+      drawFile(d.files);
+    }
+    function sum(a) { return (a || []).reduce((x, y) => x + y, 0); }
+
+    const GRID_D = 'rgba(255,255,255,.06)', TICK_D = '#97a3bd';
+    const GRID_L = 'rgba(28,36,48,.07)', TICK_L = '#5b6779';
+    let lastStats = null;
+    function chartColors() {
+      return curTheme() === 'light'
+        ? { grid: GRID_L, tick: TICK_L, tipBg: '#ffffff', tipTxt: '#1c2430', tipLine: '#dbe3ef' }
+        : { grid: GRID_D, tick: TICK_D, tipBg: 'rgba(20,28,44,.96)', tipTxt: '#e6ebf5', tipLine: 'rgba(255,255,255,.12)' };
+    }
+    function baseOpts() {
+      const c = chartColors();
+      return {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },  // 用自定义线图例，隐藏内置图例
+          tooltip: { backgroundColor: c.tipBg, titleColor: c.tipTxt, bodyColor: c.tipTxt, borderColor: c.tipLine, borderWidth: 1, padding: 10, cornerRadius: 10, usePointStyle: true, boxPadding: 6 },
+        },
+        scales: {
+          x: { grid: { color: c.grid }, border: { display: false }, ticks: { color: c.tick, font: { size: 11 }, maxRotation: 0, autoSkipPadding: 12 } },
+          y: { beginAtZero: true, grid: { color: c.grid }, border: { display: false }, ticks: { color: c.tick, precision: 0, stepSize: 1 } },
+        },
+      };
+    }
+    /* 主题切换后用缓存数据重绘，图表网格/坐标文字/tooltip 颜色跟随深浅色；
+       重绘禁用动画：VT 快照期间 Canvas 入场动画会露出空白图表 */
+    let _noAnim = false;
+    function redrawCharts() { if (!lastStats) return; _noAnim = true; try { drawGrowth(lastStats.growth); drawFile(lastStats.files); } finally { _noAnim = false; } }
+
+    const GROWTH_SERIES = [
+      { key: 'users', label: '用户', color: '#37bbfe' },
+      { key: 'groups', label: '群聊', color: '#ff9f0a' },
+      { key: 'channels', label: '频道', color: '#34c759' },
+      { key: 'posts', label: '帖子', color: '#b47eff' },
+    ];
+    const FILE_SERIES = [
+      { key: 'upload', label: '上传', color: '#37bbfe' },
+      { key: 'delete', label: '删除', color: '#ff453a' },
+    ];
+    let growthIso = -1;              // -1=全部显示；否则只单独显示该下标（隔离）
+    let fileHidden = [false, false]; // 文件图各系列隐藏态
+
+    function drawGrowth(g) {
+      const ctx = $('#growthChart');
+      if (growthChart) growthChart.destroy();
+      growthChart = new Chart(ctx, { type: 'line', data: { labels: g.labels, datasets: GROWTH_SERIES.map((s, i) => lineDs(s.label, g[s.key], s.color, growthIso !== -1 && growthIso !== i)) }, options: drawOpts() });
+      renderGrowthLegend();
+    }
+    function drawFile(f) {
+      const ctx = $('#fileChart');
+      if (fileChart) fileChart.destroy();
+      fileChart = new Chart(ctx, { type: 'bar', data: { labels: f.labels, datasets: FILE_SERIES.map((s, i) => barDs(s.label, f[s.key], s.color, fileHidden[i])) }, options: drawOpts() });
+      renderFileLegend();
+    }
+    function drawOpts() { const o = baseOpts(); if (_noAnim) o.animation = false; else o.animation = { duration: 600, easing: 'easeOutQuart' }; return o; }
+    /* 优雅曲线：平滑 tension、渐变填充、默认隐藏点、悬停高亮 */
+    function lineDs(label, data, color, hidden) {
+      return { label, data, hidden, borderColor: color, borderWidth: 2, tension: .4,
+        fill: true, backgroundColor: (c) => areaGrad(c, color),
+        pointRadius: 0, pointHoverRadius: 5, pointBackgroundColor: color, pointBorderColor: '#fff', pointBorderWidth: 1.5,
+        pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2, borderCapStyle: 'round', borderJoinStyle: 'round' };
+    }
+    function areaGrad(c, color) {
+      const chart = c.chart, area = chart.chartArea;
+      if (!area) return color + '22';
+      const gr = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+      gr.addColorStop(0, color + '55'); gr.addColorStop(1, color + '00');
+      return gr;
+    }
+    function barDs(label, data, color, hidden) {
+      return { label, data, hidden, backgroundColor: color, hoverBackgroundColor: color, borderRadius: 6, borderSkipped: false, maxBarThickness: 26 };
+    }
+
+    /* 自定义线图例：点击隔离单系列，再点恢复全部 */
+    function renderGrowthLegend() {
+      const el = $('#growthLegend'); if (!el) return;
+      el.innerHTML = GROWTH_SERIES.map((s, i) =>
+        '<span class="lg-item' + (growthIso !== -1 && growthIso !== i ? ' dim' : '') + (growthIso === i ? ' on' : '') + '" data-i="' + i + '" title="点击只看该系列，再点恢复全部">' +
+        '<i class="lg-line" style="color:' + s.color + '"></i>' + s.label + '</span>').join('');
+      Array.from(el.children).forEach(it => it.addEventListener('click', () => {
+        const i = +it.dataset.i; growthIso = (growthIso === i ? -1 : i); applyGrowthIso();
+      }));
+    }
+    function applyGrowthIso() {
+      if (!growthChart) return;
+      growthChart.data.datasets.forEach((ds, i) => growthChart.setDatasetVisibility(i, growthIso === -1 || growthIso === i));
+      growthChart.update();
+      renderGrowthLegend();
+    }
+    function renderFileLegend() {
+      const el = $('#fileLegend'); if (!el) return;
+      el.innerHTML = FILE_SERIES.map((s, i) =>
+        '<span class="lg-item' + (fileHidden[i] ? ' dim' : '') + '" data-i="' + i + '" title="点击显示/隐藏">' +
+        '<i class="lg-swatch" style="background:' + s.color + '"></i>' + s.label + '</span>').join('');
+      Array.from(el.children).forEach(it => it.addEventListener('click', () => {
+        const i = +it.dataset.i; fileHidden[i] = !fileHidden[i];
+        if (fileChart) { fileChart.setDatasetVisibility(i, !fileHidden[i]); fileChart.update(); }
+        renderFileLegend();
+      }));
+    }
+
+    /* ---------------- 实时在线名单（点“实时在线”卡片弹出） ----------------
+       接口直接读 SocketIO 进程内连接注册表，不查“在线与否”的表；
+       弹窗打开期间 15s 自动刷新一次，关闭即停定时，不留后台轮询 */
+    let onTimer = null;
+    function onRow(x) {
+      const letter = esc((x.nickname || '?').trim().slice(0, 1));
+      const ava = x.avatar
+        ? '<img class="us-ava" data-letter="' + letter + '" src="' + esc(thumbOf(x.avatar)) + '" alt="">'
+        : '<span class="us-ava us-letter">' + letter + '</span>';
+      const tags = (x.connections > 1 ? '<span class="us-multi">' + x.connections + ' 端在线</span>' : '') +
+        (x.status === 0 ? '<span class="us-ban">已封禁</span>' : '') +
+        (x.deleted ? '<span class="us-ban">已注销</span>' : '');
+      return '<div class="us-row">' + ava +
+        '<div class="us-main">' +
+          '<div class="us-top"><span class="us-name">' + esc(x.nickname) + '</span>' +
+            '<span class="us-num muted">' + esc(x.number || ('#' + x.id)) + '</span>' + tags + '</div>' +
+          '<div class="us-sub muted">本次上线 ' + esc(x.login_at || '—') +
+            (x.duration_seconds != null ? ' · 已在线 ' + fmtDur(x.duration_seconds) : '') + '</div>' +
+        '</div>' +
+        '<span class="us-uid muted">ID ' + x.id + '</span>' +
+      '</div>';
+    }
+    async function loadOnline(withLoading) {
+      const box = $('#onList');
+      if (withLoading) box.innerHTML = '<div class="empty">加载中…</div>';
+      let r;
+      try { r = await api('/admin/api/online_users'); }
+      catch (e) { box.innerHTML = '<div class="empty">加载失败：' + esc(e.message) + '</div>'; return; }
+      if (r.code !== 0) { box.innerHTML = '<div class="empty">' + esc(r.msg || '加载失败') + '</div>'; return; }
+      const d = r.data, list = d.users || [];
+      $('#onSum').textContent = d.total + ' 人在线 · ' + d.connections + ' 个连接';
+      if (!list.length) { box.innerHTML = '<div class="empty">当前没有用户在线</div>'; return; }
+      box.innerHTML = list.map(onRow).join('');
+      // 头像拉不到就降级成首字母圆（与用户端 watchAvatar 的回退思路一致，这里只需一层）
+      $$('#onList img.us-ava').forEach(im => im.addEventListener('error', () => {
+        const sp = document.createElement('span');
+        sp.className = 'us-ava us-letter'; sp.textContent = im.dataset.letter || '?';
+        im.replaceWith(sp);
+      }));
+    }
+    function openOnline() {
+      $('#onMask').classList.add('show');
+      loadOnline(true);
+      clearInterval(onTimer);
+      onTimer = setInterval(() => {
+        if ($('#onMask').classList.contains('show')) loadOnline(false);
+        else { clearInterval(onTimer); onTimer = null; }
+      }, 15000);
+    }
+    function closeOnline() {
+      $('#onMask').classList.remove('show');
+      clearInterval(onTimer); onTimer = null;
+    }
+    $('#onRefresh').addEventListener('click', () => loadOnline(true));
+    $('#onClose').addEventListener('click', closeOnline);
+    // 点遮罩空白处也能关（与其他弹窗习惯一致）
+    $('#onMask').addEventListener('click', (e) => { if (e.target === $('#onMask')) closeOnline(); });
+
+    /* ---------------- 举报：一条记录一个 div，悬停提示，点击进详情弹窗处理 ---------------- */
+    async function loadReports() {
+      const r = await api('/admin/api/reports?limit=100' + (curStatus === '' ? '' : '&status=' + curStatus));
+      if (r.code !== 0) { toast(r.msg || '加载失败', 'err'); return; }
+      const list = r.data.reports || [];
+      $('#repCount').textContent = '共 ' + r.data.total + ' 条';
+      if (!list.length) { $('#reports').innerHTML = '<div class="empty">没有符合条件的举报</div>'; return; }
+      $('#reports').innerHTML = '<div class="rec-list">' + list.map(rowHtml).join('') + '</div>';
+      $$('#reports .rec').forEach(el => el.addEventListener('click', () => openReport(+el.dataset.rid)));
+    }
+    function rowHtml(x) {
+      // 列表仅展示理由文本（单行截断、不显图），图片/完整信息在详情弹窗
+      const objLabel = x.target_type === 'user'
+        ? esc(x.target_number || ('#' + x.target_id))
+        : esc(x.target_name || ('#' + x.target_id));
+      const rep = esc((x.reporter && x.reporter.number) || ('#' + x.reporter_id));
+      return '<div class="rec" data-rid="' + x.id + '" title="点击查看详细信息并处理">' +
+        '<div class="rec-main">' +
+          '<div class="rec-top">' +
+            '<span class="tag ' + x.target_type + '">' + (TT[x.target_type] || x.target_type) + '</span>' +
+            '<span class="rec-obj">' + objLabel + '</span>' +
+            '<span class="rec-by">举报人 ' + rep + '</span>' +
+            '<span class="muted rec-time">' + esc(x.created_at || '') + '</span>' +
+          '</div>' +
+          '<div class="rec-line">' + esc(x.reason || '') + '</div>' +
+        '</div>' +
+        '<span class="st p' + x.status + '">' + ST[x.status] + '</span>' +
+        '<span class="rec-go">查看 ›</span>' +
+      '</div>';
+    }
+
+    /* ---------------- 举报详情弹窗（含处置 / 驳回） ---------------- */
+    let curReport = null;
+    async function openReport(rid) {
+      const r = await post('/admin/api/report/detail', { report_id: rid });
+      if (r.code !== 0) { toast(r.msg || '获取详情失败', 'err'); return; }
+      const d = r.data; curReport = d;
+      $('#dRid').textContent = d.id;
+      $('#dStatus').innerHTML = '<span class="st p' + d.status + '">' + ST[d.status] + '</span>';
+      const owner = d.owner ? ('<b>' + esc(d.owner.nickname || ('#' + d.owner.user_id)) + '</b>' + (d.owner.exists ? '' : '（对象已不存在）')) : '<span class="muted">无责任人信息</span>';
+      const imgs = (d.images || []).map(u => '<img src="' + esc(u) + '" data-lb="' + esc(u) + '" alt="">').join('');
+      const objShow = d.target_type === 'user' ? (d.target_number || ('#' + d.target_id)) : (d.target_name || ('#' + d.target_id));
+      $('#dDetail').innerHTML =
+        '对象：<span class="tag ' + d.target_type + '">' + (TT[d.target_type] || d.target_type) + '</span> ' + esc(objShow) + '（ID ' + d.target_id + '）<br>' +
+        '责任人：' + owner + '<br>' +
+        '举报人：' + esc((d.reporter && d.reporter.number) || ('#' + d.reporter.id)) + '<br>' +
+        '时间：' + esc(d.created_at || '') + '<br>' +
+        '理由：' + esc(d.reason) +
+        (imgs ? '<div class="rimgs">' + imgs + '</div>' : '') +
+        (d.status !== 0 ? '<div style="margin-top:8px">处理记录：' + esc(d.handle_note || ST[d.status]) + '</div>' : '');
+      $$('#dDetail .rimgs img').forEach(im => im.addEventListener('click', () => showLb(im.dataset.lb)));
+      const pending = d.status === 0;
+      $('#dActions').style.display = pending ? '' : 'none';
+      $('#dReject').hidden = !pending; $('#dConfirm').hidden = !pending;
+      if (pending) {
+        const canDisband = d.target_type === 'group' || d.target_type === 'channel';
+        $('#dDisband').checked = false; $('#dDisband').disabled = !canDisband;
+        $('#dDisband').closest('.row').style.display = canDisband ? '' : 'none';
+        $('#dBanOwner').checked = false;
+        $('#dBanDays').value = 7; $('#dBanDaysRow').hidden = true;
+        $('#dNote').value = '';
+      }
+      $('#dErr').textContent = '';
+      $('#reportMask').classList.add('show');
+    }
+    $('#dBanOwner').addEventListener('change', () => { $('#dBanDaysRow').hidden = !$('#dBanOwner').checked; });
+    $('#dCancel').addEventListener('click', () => $('#reportMask').classList.remove('show'));
+    $('#dConfirm').addEventListener('click', async () => {
+      if (!curReport) return;
+      const body = { report_id: curReport.id, disband: $('#dDisband').checked ? 1 : 0, ban_owner: $('#dBanOwner').checked ? 1 : 0, ban_days: +$('#dBanDays').value || 0, note: $('#dNote').value.trim() };
+      if (!body.disband && !body.ban_owner) { $('#dErr').textContent = '请至少选择一项处置动作'; return; }
+      $('#dConfirm').disabled = true; $('#dErr').textContent = '';
+      try {
+        const r = await post('/admin/api/report/dispose', body);
+        if (r.code === 0) { toast(r.msg || '处置完成', 'ok'); $('#reportMask').classList.remove('show'); loadReports(); loadStats(); }
+        else $('#dErr').textContent = r.msg || '处置失败';
+      } catch (e) { $('#dErr').textContent = e.message; }
+      $('#dConfirm').disabled = false;
+    });
+    $('#dReject').addEventListener('click', async () => {
+      if (!curReport) return;
+      $('#dReject').disabled = true; $('#dErr').textContent = '';
+      try {
+        const r = await post('/admin/api/report/reject', { report_id: curReport.id, note: $('#dNote').value.trim() });
+        if (r.code === 0) { toast('已驳回', 'ok'); $('#reportMask').classList.remove('show'); loadReports(); loadStats(); }
+        else $('#dErr').textContent = r.msg || '操作失败';
+      } catch (e) { $('#dErr').textContent = e.message; }
+      $('#dReject').disabled = false;
+    });
+
+    /* ---------------- 用户想法 · 反馈 ---------------- */
+    let fbStatus = '', fbCache = [], curFb = null;
+    const FBS = { 0: '待处理', 1: '已回复', 2: '已归档' };
+    async function loadFeedbacks() {
+      const r = await api('/admin/api/feedbacks?limit=100' + (fbStatus === '' ? '' : '&status=' + fbStatus));
+      if (r.code !== 0) { toast(r.msg || '加载失败', 'err'); return; }
+      fbCache = r.data.feedbacks || [];
+      $('#fbCount').textContent = '共 ' + r.data.total + ' 条';
+      if (!fbCache.length) { $('#feedbacks').innerHTML = '<div class="empty">还没有用户提交想法</div>'; return; }
+      $('#feedbacks').innerHTML = '<div class="rec-list">' + fbCache.map(fbRow).join('') + '</div>';
+      $$('#feedbacks .rec').forEach(el => el.addEventListener('click', () => openFb(+el.dataset.fid)));
+    }
+    function fbRow(x) {
+      // 列表仅一行内容预览（单行截断），完整内容/图片/回复在详情弹窗
+      const u = x.user || {};
+      return '<div class="rec" data-fid="' + x.id + '" title="点击查看详细信息并回复">' +
+        '<div class="rec-main">' +
+          '<div class="rec-top">' +
+            '<span class="tag user">用户</span>' +
+            '<span class="rec-obj">' + esc(u.number || ('#' + u.id)) + '</span>' +
+            '<span class="tag">' + esc(x.category_label || x.category) + '</span>' +
+            '<span class="muted rec-time">' + esc(x.created_at || '') + '</span>' +
+          '</div>' +
+          '<div class="rec-line">' + esc(x.content || '') + '</div>' +
+        '</div>' +
+        '<span class="st p' + x.status + '">' + (FBS[x.status] || '待处理') + '</span>' +
+        '<span class="rec-go">查看 ›</span>' +
+      '</div>';
+    }
+    function openFb(id) {
+      const x = fbCache.filter(v => v.id === id)[0];
+      if (!x) return;
+      curFb = x;
+      const u = x.user || {};
+      const imgs = (x.images || []).map(url => '<img src="' + esc(url) + '" style="width:64px;height:64px;object-fit:cover;border-radius:8px;margin:4px 4px 0 0;cursor:pointer" onclick="showLb(\'' + esc(url) + '\')">').join('');
+      $('#fFid').textContent = x.id;
+      $('#fDetail').innerHTML =
+        '提交人：<b>' + esc(u.number || ('#' + u.id)) + '</b>（用户）<br>' +
+        '分类：' + esc(x.category_label || x.category) + ' · 时间：' + esc(x.created_at || '') + '<br>' +
+        '内容：' + esc(x.content) + (imgs ? '<div>' + imgs + '</div>' : '') +
+        (x.reply ? '<div style="margin-top:8px">上次回复（' + esc(x.replied_by || '') + '）：' + esc(x.reply) + '</div>' : '');
+      $('#fReply').value = ''; $('#fErr').textContent = '';
+      $('#fbMask').classList.add('show');
+      setTimeout(() => $('#fReply').focus(), 80);
+    }
+    async function doArchive(id) {
+      const r = await post('/admin/api/feedback/reply', { feedback_id: id, action: 'archive' });
+      if (r.code === 0) { toast('已归档', 'ok'); loadFeedbacks(); loadStats(); }
+      else toast(r.msg || '操作失败', 'err');
+    }
+    function archiveFb(id) {
+      if (!confirm('确定归档这条反馈吗？归档后将不再出现在待处理列表。')) return;
+      doArchive(id);
+    }
+    $('#fCancel').addEventListener('click', () => $('#fbMask').classList.remove('show'));
+    $('#fArchive').addEventListener('click', () => {
+      if (!curFb) return;
+      const id = curFb.id;
+      if (!confirm('确定归档这条反馈吗？归档后将不再出现在待处理列表。')) return;
+      $('#fbMask').classList.remove('show');
+      doArchive(id);
+    });
+    $('#fConfirm').addEventListener('click', async () => {
+      if (!curFb) return;
+      const reply = $('#fReply').value.trim();
+      if (!reply) { $('#fErr').textContent = '回复内容不能为空'; return; }
+      $('#fConfirm').disabled = true; $('#fErr').textContent = '';
+      try {
+        const r = await post('/admin/api/feedback/reply', { feedback_id: curFb.id, action: 'reply', reply });
+        if (r.code === 0) { toast('已回复并通知用户', 'ok'); $('#fbMask').classList.remove('show'); loadFeedbacks(); loadStats(); }
+        else $('#fErr').textContent = r.msg || '操作失败';
+      } catch (e) { $('#fErr').textContent = e.message; }
+      $('#fConfirm').disabled = false;
+    });
+
+    /* ---------------- 全站公告 ----------------
+       发布后后端直接 socketio.emit('site_announcement') 广播给所有在线用户，
+       离线用户下次进入前台由 /announcement/pending 补发（侧栅放出送信小狗）。 */
+    let annCache = [], annMedia = [];
+    async function loadAnnouncements() {
+      const r = await api('/admin/api/announcements?limit=50');
+      if (r.code !== 0) { toast(r.msg || '加载失败', 'err'); return; }
+      annCache = r.data.announcements || [];
+      $('#annCount').textContent = '共 ' + r.data.total + ' 条';
+      if (!annCache.length) { $('#announcements').innerHTML = '<div class="empty">还没有发布过公告，点“＋ 发布公告”写第一条</div>'; return; }
+      $('#announcements').innerHTML = '<div class="rec-list">' + annCache.map(annRow).join('') + '</div>';
+      $$('#announcements .rec').forEach(el => el.addEventListener('click', () => openAnnDetail(+el.dataset.aid)));
+    }
+    function annRow(x) {
+      // 列表仅标题 + 正文单行截断预览，媒体/完整正文/操作在详情弹窗
+      const media = x.media || [];
+      const imgCount = media.filter(m => (m.type || 3) === 3).length;
+      const vidCount = media.filter(m => m.type === 2).length;
+      const mediaTxt = (imgCount ? imgCount + ' 图' : '') + (imgCount && vidCount ? ' · ' : '') + (vidCount ? vidCount + ' 视频' : '');
+      return '<div class="rec" data-aid="' + x.id + '" title="点击查看详细信息与操作">' +
+        '<div class="rec-main">' +
+          '<div class="rec-top">' +
+            '<span class="rec-obj">' + esc(x.title) + '</span>' +
+            '<span class="muted rec-time">' + esc(x.publisher || '—') + ' · ' + esc(x.created_at || '') + '</span>' +
+          '</div>' +
+          '<div class="rec-line">' + esc(x.content || '') + '</div>' +
+          '<div class="rec-meta muted">已知晓 ' + (x.read_count || 0) + ' 人' + (mediaTxt ? ' · 媒体 ' + mediaTxt : '') + '</div>' +
+        '</div>' +
+        '<span class="st p' + (x.status === 1 ? 1 : 2) + '">' + (x.status === 1 ? '发布中' : '已下架') + '</span>' +
+        '<span class="rec-go">查看 ›</span>' +
+      '</div>';
+    }
+    let curAnn = null;
+    function openAnnDetail(id) {
+      const x = annCache.filter(v => v.id === id)[0]; if (!x) return;
+      curAnn = x;
+      const media = x.media || [];
+      const imgs = media.filter(m => (m.type || 3) === 3).map(m => '<img src="' + esc(m.url) + '" data-lb="' + esc(m.url) + '" alt="">').join('');
+      const vids = media.filter(m => m.type === 2).map(m => '<video src="' + esc(m.url) + '" controls preload="metadata" style="width:100%;max-width:320px;border-radius:8px;margin-top:6px;display:block"></video>').join('');
+      $('#anId').textContent = x.id;
+      $('#anStatus').innerHTML = '<span class="st p' + (x.status === 1 ? 1 : 2) + '">' + (x.status === 1 ? '发布中' : '已下架') + '</span>';
+      $('#anDetail').innerHTML =
+        '<b>' + esc(x.title) + '</b><br>' +
+        '发布人：' + esc(x.publisher || '—') + ' · 时间：' + esc(x.created_at || '') + ' · 已知晓 ' + (x.read_count || 0) + ' 人<br>' +
+        (x.content ? '正文：' + esc(x.content) + '<br>' : '') +
+        (imgs ? '<div class="rimgs">' + imgs + '</div>' : '') + vids;
+      $$('#anDetail .rimgs img').forEach(im => im.addEventListener('click', () => showLb(im.dataset.lb)));
+      $('#anToggle').textContent = x.status === 1 ? '下架' : '重新发布';
+      $('#anErr').textContent = '';
+      $('#annDetailMask').classList.add('show');
+    }
+    $('#anClose').addEventListener('click', () => $('#annDetailMask').classList.remove('show'));
+    $('#anToggle').addEventListener('click', async () => {
+      if (!curAnn) return;
+      const offline = curAnn.status === 1;
+      $('#anToggle').disabled = true;
+      try {
+        const r = await post('/admin/api/announcement/offline', { announcement_id: curAnn.id, offline: offline ? 1 : 0 });
+        if (r.code === 0) { toast(r.msg || '已更新', 'ok'); $('#annDetailMask').classList.remove('show'); loadAnnouncements(); loadStats(); }
+        else $('#anErr').textContent = r.msg || '操作失败';
+      } finally { $('#anToggle').disabled = false; }
+    });
+    $('#anDel').addEventListener('click', async () => {
+      if (!curAnn) return;
+      if (!confirm('删除后公告及其图片/视频、所有用户的已知晓记录一并清除，确定？')) return;
+      $('#anDel').disabled = true;
+      try {
+        const r = await post('/admin/api/announcement/delete', { announcement_id: curAnn.id });
+        if (r.code === 0) { toast('已删除', 'ok'); $('#annDetailMask').classList.remove('show'); loadAnnouncements(); loadStats(); }
+        else $('#anErr').textContent = r.msg || '删除失败';
+      } finally { $('#anDel').disabled = false; }
+    });
+    function renderAnnMedia() {
+      $('#aMedia').innerHTML = annMedia.map((m, i) =>
+        '<div class="mi">' + (m.type === 2
+          ? '<video src="' + esc(m.url) + '" muted preload="metadata"></video><span class="vt">视频</span>'
+          : '<img src="' + esc(m.url) + '" alt="">') +
+        '<button type="button" class="rm" data-i="' + i + '">✕</button></div>').join('');
+    }
+    $('#aAdd').addEventListener('click', () => $('#aFile').click());
+    $('#aMedia').addEventListener('click', (e) => {
+      const b = e.target.closest('.rm'); if (!b) return;
+      annMedia.splice(+b.dataset.i, 1); renderAnnMedia();
+    });
+    $('#aFile').addEventListener('change', async () => {
+      const files = Array.from($('#aFile').files || []);
+      $('#aFile').value = '';
+      for (const f of files) {
+        if (annMedia.length >= 9) { $('#aErr').textContent = '最多附 9 个图片/视频'; break; }
+        $('#aErr').textContent = '上传中：' + f.name;
+        const fd = new FormData(); fd.append('file', f);
+        try {
+          const res = await fetch('/admin/api/announcement/media_upload', { method: 'POST', body: fd, credentials: 'same-origin' });
+          const ct = res.headers.get('content-type') || '';
+          if (!ct.includes('application/json')) { $('#aErr').textContent = '上传响应异常，可能登录已失效'; continue; }
+          const r = await res.json();
+          if (r.code !== 0) { $('#aErr').textContent = r.msg || '上传失败'; continue; }
+          annMedia.push(r.data);
+        } catch (e) { $('#aErr').textContent = '上传失败：' + e.message; }
+      }
+      $('#aErr').textContent = '';
+      renderAnnMedia();
+    });
+    $('#annNew').addEventListener('click', () => {
+      annMedia = []; renderAnnMedia();
+      $('#aTitle').value = ''; $('#aContent').value = ''; $('#aErr').textContent = '';
+      $('#annMask').classList.add('show');
+      setTimeout(() => $('#aTitle').focus(), 80);
+    });
+    $('#aCancel').addEventListener('click', () => $('#annMask').classList.remove('show'));
+    $('#aConfirm').addEventListener('click', async () => {
+      const title = $('#aTitle').value.trim();
+      if (!title) { $('#aErr').textContent = '公告标题不能为空'; return; }
+      $('#aConfirm').disabled = true; $('#aErr').textContent = '';
+      try {
+        const r = await post('/admin/api/announcement/create', { title, content: $('#aContent').value.trim(), media: annMedia });
+        if (r.code === 0) {
+          toast('公告已发布，已推送给在线用户', 'ok');
+          $('#annMask').classList.remove('show');
+          loadAnnouncements(); loadStats();
+        } else $('#aErr').textContent = r.msg || '发布失败';
+      } catch (e) { $('#aErr').textContent = e.message; }
+      $('#aConfirm').disabled = false;
+    });
+
+    /* ---------------- 图片预览 ---------------- */
+    function showLb(src) { $('#lbImg').src = src; $('#lightbox').classList.add('show'); }
+    $('#lightbox').addEventListener('click', () => $('#lightbox').classList.remove('show'));
+
+    /* ---------------- 深浅色主题：长按 500ms 切换，圆形光圈揭示动效与前台汉堡同款 ---------------- */
+    const THEME_KEY = 'admin_theme';
+    function curTheme() { return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'; }
+    function applyTheme(t) {
+      document.documentElement.dataset.theme = t;
+      try { localStorage.setItem(THEME_KEY, t); } catch (e) {}
+      $('#themeBtn').textContent = t === 'dark' ? '☀' : '☾';
+      redrawCharts();
+    }
+    function toggleThemeFromBtn(btn) {
+      const mode = curTheme() === 'dark' ? 'light' : 'dark';
+      const rect = btn.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+      // 圆半径需盖到距圆心最远的屏幕角，取两轴最大距离的斜边
+      const radius = Math.hypot(Math.max(cx, innerWidth - cx), Math.max(cy, innerHeight - cy)) + 20;
+      const apply = () => applyTheme(mode);
+      if (!document.startViewTransition || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { apply(); return; }
+      const vt = document.startViewTransition(apply);
+      vt.ready.then(() => {
+        document.documentElement.animate(
+          { clipPath: ['circle(0px at ' + cx + 'px ' + cy + 'px)', 'circle(' + radius + 'px at ' + cx + 'px ' + cy + 'px)'] },
+          { duration: 680, easing: 'cubic-bezier(.32,.72,.24,1)', pseudoElement: '::view-transition-new(root)' }
+        );
+      });
+      vt.catch(() => {});  // VT 被中止时静默，主题已在 apply 中切换
+    }
+    const themeBtn = $('#themeBtn');
+    let themeLpTimer = null;
+    themeBtn.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      clearTimeout(themeLpTimer);
+      themeLpTimer = setTimeout(() => {
+        themeLpTimer = null;
+        themeBtn.dataset.suppress = '1';
+        if (navigator.vibrate) { try { navigator.vibrate(8); } catch (_) {} }
+        toggleThemeFromBtn(themeBtn);
+      }, 500);
+    });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => themeBtn.addEventListener(ev, () => clearTimeout(themeLpTimer)));
+    themeBtn.addEventListener('click', () => {
+      if (themeBtn.dataset.suppress) { themeBtn.dataset.suppress = ''; return; }  // 长按已触发，吞掉随后的 click
+      toast('长按按钮切换深浅色模式');
+    });
+    applyTheme(localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark');
+
+    /* ---------------- 其他交互 ---------------- */
+    $$('.chip[data-st]').forEach(c => c.addEventListener('click', () => { $$('.chip[data-st]').forEach(x => x.classList.remove('on')); c.classList.add('on'); curStatus = c.dataset.st; loadReports(); }));
+    $$('.fb-chip').forEach(c => c.addEventListener('click', () => { $$('.fb-chip').forEach(x => x.classList.remove('on')); c.classList.add('on'); fbStatus = c.dataset.fbst; loadFeedbacks(); }));
+    $$('.dash-tab').forEach(t => t.addEventListener('click', () => {
+      $$('.dash-tab').forEach(x => x.classList.remove('on')); t.classList.add('on');
+      const pane = t.dataset.pane;
+      $$('.dash-pane').forEach(p => p.classList.toggle('on', p.dataset.pane === pane));
+    }));
+    $('#daysSel').addEventListener('change', loadStats);
+    $('#refreshBtn').addEventListener('click', () => { loadStats(); loadReports(); loadFeedbacks(); loadAnnouncements(); });
+    $('#logoutBtn').addEventListener('click', async () => { await post('/admin/logout'); location.href = '/admin/login'; });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') { $('#reportMask').classList.remove('show'); $('#fbMask').classList.remove('show'); $('#annMask').classList.remove('show'); $('#annDetailMask').classList.remove('show'); $('#lightbox').classList.remove('show'); } });
+
+    loadStats();
+    loadReports();
+    loadFeedbacks();
+    loadAnnouncements();
+  </script>
+</body>
+</html>

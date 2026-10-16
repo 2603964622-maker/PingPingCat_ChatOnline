@@ -1,10 +1,313 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PingPingCat · 登录</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='ico/little_jww2.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
+<body class="auth-body">
+    <div class="auth-bg"></div>
+    <!-- 右上角：管理端登录入口 -->
+    <a class="auth-admin-entry" href="/admin/login" title="前往管理端">
+        <span class="aae-dot"></span>管理端登录
+    </a>
+    <div class="auth-card" id="authCard">
+        <div class="auth-logo">
+            <!-- 皮皮猫：照片白底用 multiply 与白卡融合去底，底部椭圆落地影配合悬浮动效 -->
+            <!-- 彩蛋：头顶「点我试试」提示气泡，点猫随机弹文案，猫本体挤压+弹跳 -->
+            <div class="cat-shade"></div>
+            <div class="cat-bubble" id="catBubble">点我试试</div>
+            <img class="auth-cat" id="authCat" src="{{ url_for('static', filename='ico/little_jww2.png') }}" alt="PingPingCat" title="点我试试">
+        </div>
+        <h1 class="auth-title">PingPingCat</h1>
+        <p class="auth-sub" id="authSub">登录你的账号以继续</p>
 
+        <!-- 登录表单 -->
+        <form class="auth-form" id="loginForm" autocomplete="off">
+            <div class="field">
+                <input type="email" id="loginEmail" required placeholder=" ">
+                <label for="loginEmail">邮箱</label>
+            </div>
+            <div class="field">
+                <input type="password" id="loginPassword" required placeholder=" ">
+                <label for="loginPassword">密码</label>
+            </div>
+            <div class="auth-error" id="loginError"></div>
+            <button type="submit" class="auth-btn">登 录</button>
+            <div class="auth-switch">还没有账号？<a href="#" id="toRegister">注册</a> · <a href="#" id="toForgot">忘记密码？</a></div>
+        </form>
+
+        <!-- 注册表单 -->
+        <form class="auth-form" id="registerForm" autocomplete="off" hidden>
+            <div class="field">
+                <input type="email" id="regEmail" required placeholder=" ">
+                <label for="regEmail">邮箱</label>
+            </div>
+            <div class="field field-inline">
+                <input type="text" id="regCode" required placeholder=" ">
+                <label for="regCode">邮箱验证码</label>
+                <button type="button" class="code-btn" id="sendCode">获取验证码</button>
+            </div>
+            <div class="field">
+                <input type="text" id="regNickname" required placeholder=" ">
+                <label for="regNickname">昵称</label>
+            </div>
+            <div class="field">
+                <input type="password" id="regPassword" required placeholder=" " autocomplete="new-password">
+                <label for="regPassword">密码</label>
+            </div>
+            <div class="field">
+                <input type="password" id="regConfirm" required placeholder=" " autocomplete="new-password">
+                <label for="regConfirm">确认密码</label>
+            </div>
+            <div class="auth-error" id="regError"></div>
+            <button type="submit" class="auth-btn">注 册</button>
+            <div class="auth-switch">已有账号？<a href="#" id="toLogin">登录</a></div>
+        </form>
+
+        <!-- 忘记密码：重置密码表单（免登录，验证码发到注册邮箱） -->
+        <form class="auth-form" id="resetForm" autocomplete="off" hidden>
+            <div class="field">
+                <input type="email" id="rstEmail" required placeholder=" ">
+                <label for="rstEmail">注册邮箱</label>
+            </div>
+            <div class="field field-inline">
+                <input type="text" id="rstCode" required placeholder=" ">
+                <label for="rstCode">邮箱验证码</label>
+                <button type="button" class="code-btn" id="sendResetCode">获取验证码</button>
+            </div>
+            <div class="field">
+                <input type="password" id="rstPassword" required minlength="6" placeholder=" " autocomplete="new-password">
+                <label for="rstPassword">新密码（至少 6 位）</label>
+            </div>
+            <div class="field">
+                <input type="password" id="rstConfirm" required placeholder=" " autocomplete="new-password">
+                <label for="rstConfirm">确认新密码</label>
+            </div>
+            <div class="auth-error" id="rstError"></div>
+            <button type="submit" class="auth-btn">重置密码</button>
+            <div class="auth-switch">想起来了？<a href="#" id="backToLogin">返回登录</a></div>
+        </form>
+    </div>
+
+    <script>
+    (function () {
+        const $ = (s) => document.querySelector(s);
+        const card = $('#authCard');
+        const loginForm = $('#loginForm'), registerForm = $('#registerForm'), resetForm = $('#resetForm');
+
+        // 浏览器自动填充不触发 input/focus 事件，部分版本也不重算 :placeholder-shown，
+        // 导致标签和已填内容重叠。利用 :-webkit-autofill 触发的 animationstart 事件补打标记类，让标签立即抬起。
+        document.addEventListener('animationstart', (e) => {
+            if (e.animationName === 'autofill-notify') e.target.classList.add('is-autofilled');
+        }, true);
+        // 用户手动编辑后移除标记，交还给 :placeholder-shown 正常接管（清空时标签能落回去）
+        document.querySelectorAll('.field input').forEach(inp =>
+            inp.addEventListener('input', () => inp.classList.remove('is-autofilled')));
+
+        async function postJSON(url, body) {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(body)
+            });
+            const ct = res.headers.get('content-type') || '';
+            if (!ct.includes('application/json')) return { code: -1, msg: '响应格式异常' };
+            return res.json();
+        }
+        function shake() {
+            card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake');
+        }
+        function showError(el, msg) { el.textContent = msg || ''; el.classList.remove('ok'); if (msg) shake(); }
+
+        // 切换登录/注册（副标题同步）
+        $('#toRegister').addEventListener('click', (e) => {
+            e.preventDefault();
+            card.classList.add('flip-out');
+            setTimeout(() => {
+                loginForm.hidden = true; registerForm.hidden = false;
+                $('#authSub').textContent = '注册账号，开始聊天';
+                card.classList.remove('flip-out'); card.classList.add('flip-in');
+            }, 160);
+        });
+        $('#toLogin').addEventListener('click', (e) => {
+            e.preventDefault();
+            card.classList.add('flip-out');
+            setTimeout(() => {
+                registerForm.hidden = true; loginForm.hidden = false;
+                $('#authSub').textContent = '登录你的账号以继续';
+                card.classList.remove('flip-out'); card.classList.add('flip-in');
+            }, 160);
+        });
+
+        // 登录
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            showError($('#loginError'), '');
+            const r = await postJSON('/user/login', {
+                email: $('#loginEmail').value.trim(),
+                password: $('#loginPassword').value
+            });
+            if (r.code === 0) { window.location.href = '/'; return; }
+            showError($('#loginError'), r.msg || '登录失败');
+        });
+
+        // 发送验证码
+        let codeTimer = null;
+        $('#sendCode').addEventListener('click', async () => {
+            const email = $('#regEmail').value.trim();
+            if (!email) { showError($('#regError'), '请先填写邮箱'); return; }
+            const btn = $('#sendCode'); btn.disabled = true;
+            const r = await postJSON('/user/mail/register/captcha', { email });
+            if (r.code !== 0) { showError($('#regError'), r.msg || '发送失败'); btn.disabled = false; return; }
+            let s = 60; btn.textContent = s + 's';
+            codeTimer = setInterval(() => {
+                s--; btn.textContent = s + 's';
+                if (s <= 0) { clearInterval(codeTimer); btn.disabled = false; btn.textContent = '重新获取'; }
+            }, 1000);
+        });
+
+        // 确认密码：输入时实时比对（不走 showError，避免每敲一键就抖动卡片）
+        function bindConfirmMatch(pwdSel, cfmSel, errSel) {
+            const check = () => {
+                const c = $(cfmSel), err = $(errSel);
+                if (c.value && c.value !== $(pwdSel).value) err.textContent = '两次密码不一致';
+                else err.textContent = '';
+            };
+            $(cfmSel).addEventListener('input', check);
+            $(pwdSel).addEventListener('input', check);
+        }
+        bindConfirmMatch('#regPassword', '#regConfirm', '#regError');
+        bindConfirmMatch('#rstPassword', '#rstConfirm', '#rstError');
+
+        // 注册
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            showError($('#regError'), '');
+            if ($('#regPassword').value !== $('#regConfirm').value) { showError($('#regError'), '两次密码不一致，请检查'); return; }
+            const r = await postJSON('/user/register', {
+                email: $('#regEmail').value.trim(),
+                email_code: $('#regCode').value.trim(),
+                nickname: $('#regNickname').value.trim(),
+                password: $('#regPassword').value
+            });
+            if (r.code === 0) {
+                registerForm.hidden = true; loginForm.hidden = false;
+                $('#authSub').textContent = '登录你的账号以继续';
+                $('#loginEmail').value = $('#regEmail').value.trim();
+            }
+            showError($('#regError'), r.code === 0 ? '' : (r.msg || '注册失败'));
+        });
+
+        /* ---------------- 忘记密码 ---------------- */
+        // 带翻转过渡地切换到目标表单，并同步副标题
+        function flipTo(form, sub) {
+            card.classList.add('flip-out');
+            setTimeout(() => {
+                loginForm.hidden = registerForm.hidden = resetForm.hidden = true;
+                form.hidden = false;
+                $('#authSub').textContent = sub;
+                card.classList.remove('flip-out'); card.classList.add('flip-in');
+            }, 160);
+        }
+        $('#toForgot').addEventListener('click', (e) => {
+            e.preventDefault();
+            $('#rstEmail').value = $('#loginEmail').value.trim(); // 带入登录页已填邮箱
+            flipTo(resetForm, '通过邮箱验证码重置密码');
+        });
+        $('#backToLogin').addEventListener('click', (e) => {
+            e.preventDefault();
+            flipTo(loginForm, '登录你的账号以继续');
+        });
+
+        // 发送重置验证码（60s 重发冷却，与后端限流一致）
+        let rstTimer = null;
+        $('#sendResetCode').addEventListener('click', async () => {
+            const email = $('#rstEmail').value.trim();
+            if (!email) { showError($('#rstError'), '请先填写注册邮箱'); return; }
+            const btn = $('#sendResetCode'); btn.disabled = true;
+            const r = await postJSON('/user/mail/update_passwd/captcha', { email });
+            if (r.code !== 0) { showError($('#rstError'), r.msg || '发送失败'); btn.disabled = false; return; }
+            showError($('#rstError'), '');
+            let s = 60; btn.textContent = s + 's';
+            rstTimer = setInterval(() => {
+                s--; btn.textContent = s + 's';
+                if (s <= 0) { clearInterval(rstTimer); btn.disabled = false; btn.textContent = '重新获取'; }
+            }, 1000);
+        });
+
+        // 提交重置：成功后回登录页，预填邮箱并提示
+        resetForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            showError($('#rstError'), '');
+            if ($('#rstPassword').value !== $('#rstConfirm').value) { showError($('#rstError'), '两次密码不一致，请检查'); return; }
+            const r = await postJSON('/user/update/password', {
+                email: $('#rstEmail').value.trim(),
+                eCode: $('#rstCode').value.trim(),
+                new_password: $('#rstPassword').value
+            });
+            if (r.code === 0) {
+                const email = $('#rstEmail').value.trim();
+                resetForm.reset();
+                flipTo(loginForm, '登录你的账号以继续');
+                $('#loginEmail').value = email;
+                $('#loginPassword').value = '';
+                const le = $('#loginError');
+                le.textContent = '密码重置成功，请用新密码登录';
+                le.classList.add('ok');
+            } else {
+                showError($('#rstError'), r.msg || '重置失败');
+            }
+        });
+
+        // 直达 /user/register 会重定向到 /user/login?mode=register：进页即展开注册表单
+        if (new URLSearchParams(location.search).get('mode') === 'register') {
+            loginForm.hidden = true; registerForm.hidden = false;
+            $('#authSub').textContent = '注册账号，开始聊天';
+        }
+        // 单设备登录：同账号在其它设备重新登录后，旧设备被踢回登录页（kick=1），告知原因
+        if (new URLSearchParams(location.search).get('kick') === '1') {
+            showError($('#loginError'), '账号已在其它设备登录，本机已自动退出');
+        }
+
+        /* ---------------- 皮皮猫彩蛋：点猫弹气泡文案 ---------------- */
+        const cat = $('#authCat'), catBubble = $('#catBubble');
+        const CAT_TIPS = [
+            '喵喵喵？先登录再玩我～',
+            '我是皮皮猫，PingPingCat 的招牌喵！',
+            '没账号？点下面的「注册」秒开聊～',
+            '忘了密码？「忘记密码」帮你找回',
+            '别戳啦，我都要掉毛了 🐾',
+            '今天也要开心聊天鸭！',
+            '第一次见面就摸我，害羞喵…',
+            '我虽然是只猫，其实更像一条狗，汪汪！',
+        ];
+        let lastTip = -1, tipTimer = null;
+        catBubble.addEventListener('click', () => cat.click());
+        cat.addEventListener('click', () => {
+            // 挤压回弹：移除中的动画强制重排后重放，连点也有反馈
+            cat.classList.remove('cat-squish'); void cat.offsetWidth; cat.classList.add('cat-squish');
+            // 随机文案：与上次不同，气泡重新弹出
+            let i;
+            do { i = Math.floor(Math.random() * CAT_TIPS.length); } while (i === lastTip && CAT_TIPS.length > 1);
+            lastTip = i;
+            catBubble.textContent = CAT_TIPS[i];
+            catBubble.classList.remove('hint', 'pop', 'fade'); void catBubble.offsetWidth; catBubble.classList.add('pop');
+            // 悬停 10 秒没点，气泡悄悄消失；点击后 3 秒消失
+            clearTimeout(tipTimer);
+            tipTimer = setTimeout(() => catBubble.classList.add('fade'), 3000);
+        });
+        // pop 结束后摘掉动画类，否则 both 填充会锁住 transform，fade 的淡出上移动画不生效
+        catBubble.addEventListener('animationend', (e) => {
+            if (e.animationName === 'bubblePop') catBubble.classList.remove('pop');
+        });
+        // 首次「点我试试」提示：12 秒无交互一直跟着悬浮动画轻飘
+        catBubble.classList.add('hint');
+        setTimeout(() => { if (catBubble.classList.contains('hint')) catBubble.classList.add('fade'); }, 12000);
+    })();
+    </script>
 </body>
 </html>

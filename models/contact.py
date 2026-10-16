@@ -41,9 +41,15 @@ class Blacklist(db.Model):
 
     id = db.Column(db.Integer, primary_key=True, comment='拉黑名单编号')
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='拉黑者')
-    blocked_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='被拉黑者')
+    block_type = db.Column(db.String(16), nullable=False, default='user', comment='拉黑对象类型：user|group|channel')
+    target_id = db.Column(db.Integer, nullable=False, comment='被拉黑的用户/群/频道ID')
     reason = db.Column(db.String(200), default=None, comment='拉黑原因')
     created_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), comment='拉黑时间')
 
+    __table_args__ = (
+        # 同一拉黑者对同一类型的同一目标只能拉黑一次
+        db.UniqueConstraint('user_id', 'block_type', 'target_id', name='uk_blacklist'),
+    )
+
     def __repr__(self):
-        return f"<Blacklist {self.user_id} blocks {self.blocked_id}>"
+        return f"<Blacklist {self.user_id} blocks {self.block_type}:{self.target_id}>"

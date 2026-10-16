@@ -11,10 +11,11 @@ class BotTemplate(db.Model):
     __tablename__ = 'bot_templates'
 
     id = db.Column(db.Integer, primary_key=True, comment='模板ID')
-    name = db.Column(db.String(64), nullable=False, comment='Bot名称')
+    code = db.Column(db.String(50), unique=True, default=None, comment='程序唯一标识(引擎按此派发规则，永不修改)')
+    name = db.Column(db.String(64), nullable=False, comment='Bot名称(展示用，可改)')
     description = db.Column(db.String(200), default=None, comment='功能描述')
     avatar = db.Column(db.String(500), default=None, comment='Bot头像')
-    config = db.Column(db.Text, default=None, comment='JSON配置(欢迎语/规则等)')
+    config = db.Column(db.Text, default=None, comment='JSON默认配置(各群未覆盖时生效)')
     status = db.Column(db.SmallInteger, default=1, comment='1=启用 0=停用')
     created_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), comment='创建时间')
 
@@ -29,6 +30,7 @@ class GroupBot(db.Model):
     group_id = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=False, comment='群ID')
     bot_template_id = db.Column(db.Integer, db.ForeignKey('bot_templates.id'), nullable=False, comment='模板ID')
     enabled = db.Column(db.SmallInteger, default=1, comment='1=开启 0=关闭')
+    config = db.Column(db.Text, default=None, comment='群级JSON配置，覆盖模板默认')
     added_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), comment='添加时间')
 
     __table_args__ = (
@@ -46,6 +48,7 @@ class ChannelBot(db.Model):
     channel_id = db.Column(db.Integer, db.ForeignKey('channels.id'), nullable=False, comment='频道ID')
     bot_template_id = db.Column(db.Integer, db.ForeignKey('bot_templates.id'), nullable=False, comment='模板ID')
     enabled = db.Column(db.SmallInteger, default=1, comment='1=开启 0=关闭')
+    config = db.Column(db.Text, default=None, comment='频道级JSON配置，覆盖模板默认')
     added_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), comment='添加时间')
 
     __table_args__ = (

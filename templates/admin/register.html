@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatOnline · 注册管理员</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body>
+  <div class="auth-wrap">
+    <form class="auth-box" id="f" autocomplete="off">
+      <div class="auth-brand"><span class="dot">管</span></div>
+      <div class="auth-title">注册管理员</div>
+      <p class="auth-sub">首个注册的管理员将自动成为超级管理员</p>
+      <div class="adm-field"><label>用户名（至少 3 位）</label><input type="text" id="username" required></div>
+      <div class="adm-field"><label>显示名（可选）</label><input type="text" id="nickname"></div>
+      <div class="adm-field"><label>密码（至少 6 位）</label><input type="password" id="password" required></div>
+      <div class="adm-field"><label>邀请密钥（若服务端已配置则必填）</label><input type="text" id="invite_key"></div>
+      <div class="adm-err" id="err"></div>
+      <button type="submit" class="adm-btn">注 册</button>
+      <div class="adm-switch">已有账号？<a href="/admin/login">去登录</a></div>
+    </form>
+  </div>
+  <script>
+    const $ = s => document.querySelector(s);
+    $('#f').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      $('#err').textContent = '';
+      const btn = $('.adm-btn'); btn.disabled = true;
+      try {
+        const res = await fetch('/admin/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({
+          username: $('#username').value.trim(), nickname: $('#nickname').value.trim(),
+          password: $('#password').value, invite_key: $('#invite_key').value.trim() }) });
+        const r = await res.json();
+        if (r.code === 0) { window.location.href = '/admin/login'; return; }
+        $('#err').textContent = r.msg || '注册失败';
+      } catch (err) { $('#err').textContent = '网络错误'; }
+      btn.disabled = false;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatOnline · 管理端登录</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body>
+  <div class="auth-wrap">
+    <form class="auth-box" id="f" autocomplete="off">
+      <div class="auth-brand"><span class="dot">管</span></div>
+      <div class="auth-title">ChatOnline 管理端</div>
+      <p class="auth-sub">管理员登录后进入数据看板</p>
+      <div class="adm-field"><label>用户名</label><input type="text" id="username" required></div>
+      <div class="adm-field"><label>密码</label><input type="password" id="password" required></div>
+      <div class="adm-err" id="err"></div>
+      <button type="submit" class="adm-btn">登 录</button>
+      <div class="adm-switch">还没有管理员账号？<a href="/admin/register">注册管理员</a> · <a href="/">返回前台</a></div>
+    </form>
+  </div>
+  <script>
+    const $ = s => document.querySelector(s);
+    $('#f').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      $('#err').textContent = '';
+      const btn = $('.adm-btn'); btn.disabled = true;
+      try {
+        const res = await fetch('/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ username: $('#username').value.trim(), password: $('#password').value }) });
+        const r = await res.json();
+        if (r.code === 0) { window.location.href = '/admin/dashboard'; return; }
+        $('#err').textContent = r.msg || '登录失败';
+      } catch (err) { $('#err').textContent = '网络错误'; }
+      btn.disabled = false;
+    });
+  </script>
+</body>
+</html>

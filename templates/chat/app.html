@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ChatOnline</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="app-body">
+    <!-- 左侧抽屉菜单 -->
+    <div class="drawer-mask" id="drawerMask" hidden></div>
+    <aside class="drawer" id="drawer">
+        <div class="drawer-head">
+            <img class="drawer-avatar" id="drawerAvatar" alt="">
+            <div class="drawer-id">
+                <div class="drawer-name" id="drawerName">—</div>
+                <div class="drawer-number" id="drawerNumber">—</div>
+            </div>
+        </div>
+        <nav class="drawer-menu">
+            <button class="drawer-item" data-act="newgroup"><i class="ic ic-group"></i><span>新建群组</span></button>
+            <button class="drawer-item" data-act="newchannel"><i class="ic ic-channel"></i><span>新建频道</span></button>
+            <button class="drawer-item" data-act="join"><i class="ic ic-add"></i><span>添加/搜索编号</span></button>
+            <button class="drawer-item" data-act="notify"><i class="ic ic-bell"></i><span>系统通知</span><span class="drawer-badge" id="drawerNotifBadge" hidden></span></button>
+            <button class="drawer-item" data-act="feedback"><i class="ic ic-idea"></i><span>我的想法</span><span class="drawer-badge" id="drawerFbBadge" hidden></span></button>
+            <!-- 设置：抽屉内嵌套手风琴（外观/账号），内容由 JS 渲染 -->
+            <div class="drawer-settings" id="drawerSettings"></div>
+            <button class="drawer-item" data-act="blacklist"><i class="ic ic-ban"></i><span>黑名单</span><span class="drawer-badge" id="drawerBlkBadge" hidden></span></button>
+        </nav>
+        <div class="drawer-foot">
+            <button class="drawer-item danger" data-act="logout"><i class="ic ic-out"></i><span>退出登录</span></button>
+        </div>
+    </aside>
+
+    <div class="app" id="app">
+        <!-- 会话列表侧栏 -->
+        <section class="sidebar">
+            <header class="sidebar-head">
+                <button class="icon-btn" id="menuBtn" title="菜单 · 长按切换深浅色"><span class="hamburger"></span><span class="menu-dot" id="menuNotifDot" hidden></span></button>
+                <div class="search-box">
+                    <i class="ic ic-search"></i>
+                    <input id="searchInput" type="text" placeholder="搜索" autocomplete="off">
+                </div>
+            </header>
+            <div class="conv-list" id="convList">
+                <div class="conv-empty" id="convEmpty">还没有会话<br><span>点左上角菜单，去添加好友、群组或频道</span></div>
+            </div>
+            <!-- 其他 tab 面板：通讯录 / 动态 / 个人资料（设置已内置到汉堡抽屉） -->
+            <div class="side-panel" id="panelContacts" hidden></div>
+            <div class="side-panel" id="panelMoments" hidden></div>
+            <div class="side-panel" id="panelProfile" hidden></div>
+            <!-- 全站公告送信犬：管理员发布公告后从侧栏左下角起飞，在会话列表上自由飞行，点它看公告 -->
+            <div class="ann-pet" id="annPet" hidden>
+                <div class="ap-inner" id="apInner">
+                    <div class="ap-bubble" id="apBubble">说来公告啦，快来看看吧</div>
+                    <img class="ap-dog" src="/static/ico/little_jww.png" alt="送信小吉娃娃" draggable="false">
+                    <span class="ap-count" id="apCount">1</span>
+                </div>
+            </div>
+            <nav class="tabbar" id="tabbar">
+                <button class="tab active" data-tab="chats"><span class="tab-ic"><i class="ic ic-tab-chat"></i></span><span>聊天</span></button>
+                <button class="tab" data-tab="contacts"><span class="tab-ic"><i class="ic ic-tab-contacts"></i></span><span>通讯录</span></button>
+                <button class="tab" data-tab="moments"><span class="tab-ic"><i class="ic ic-tab-moments"></i></span><span>动态</span></button>
+                <button class="tab" data-tab="profile"><span class="tab-ic"><i class="ic ic-tab-profile"></i></span><span>资料</span></button>
+            </nav>
+        </section>
+
+        <!-- 可拖拽分隔条（仅桌面调节左右栏宽度） -->
+        <div class="resizer" id="sidebarResizer" title="拖动调节宽度"></div>
+
+        <!-- 主聊天区 -->
+        <section class="main" id="main">
+            <div class="chat-placeholder" id="chatPlaceholder">
+                <div class="ph-roam" id="phRoam">
+                    <div class="ph-hearts" id="phHearts"></div>
+                    <div class="ph-bubble" id="phBubble">点点我好酥胡~</div>
+                    <img class="ph-pet" id="phPet" src="/static/ico/little_jww.png" alt="小吉娃娃">
+                </div>
+                <div class="ph-text">您还没有选择会话哟</div>
+            </div>
+
+            <div class="chat-panel" id="chatPanel" hidden>
+                <header class="chat-head">
+                    <button class="icon-btn back-btn" id="backBtn" title="收起"><span class="chev"></span></button>
+                    <div class="chat-id" id="chatId">
+                        <img class="chat-avatar" id="chatAvatar" alt="">
+                        <div class="chat-meta">
+                            <div class="chat-title" id="chatTitle">—</div>
+                            <div class="chat-sub" id="chatSub"></div>
+                        </div>
+                        <div class="chat-search-field">
+                            <i class="ic ic-search"></i>
+                            <input id="chatSearchInput" placeholder="搜索当前会话…" autocomplete="off">
+                            <span class="cs-count" id="chatSearchCount"></span>
+                        </div>
+                    </div>
+                    <div class="chat-actions">
+                        <button class="icon-btn" id="chatSearchBtn" title="搜索内容"><i class="ic ic-search"></i></button>
+                        <button class="icon-btn" id="chatInfoBtn" title="更多"><i class="ic ic-more"></i></button>
+                    </div>
+                </header>
+
+                <div class="msg-scroll" id="msgScroll">
+                    <button class="jump-btn" id="jumpBtn" hidden><i class="ic ic-down"></i></button>
+                    <div class="msg-list" id="msgList"></div>
+                </div>
+
+                <!-- 群聊信息：点击右上角菜单后整个内容区切换为此视图（成员 + 群文件）。不用 hidden 属性，由 .conv-info-view 默认 display:none + .info-open 控制显隐 -->
+                <div class="conv-info-view" id="convInfoView"></div>
+
+                <!-- 频道模式底部栏：帖子流=“发帖”按钮（仅主理人/副主理人）；未订阅=“加入频道”；评论详情=评论输入框。静音已移至右上角 ⋮ 菜单。子元素由 JS 切 .hidden 控制 -->
+                <div class="channel-publish" id="channelPublish">
+                    <button class="publish-btn" id="channelJoinBtn" hidden>加入频道</button>
+                    <button class="publish-btn" id="publishPostBtn" hidden>发帖</button>
+                    <div class="cr-reply" id="commentReplyBar" hidden></div>
+                    <textarea id="postText" rows="1" placeholder="发布评论…" hidden></textarea>
+                    <button class="send-fab" id="postSendBtn" title="发送" hidden><i class="ic ic-send"></i></button>
+                </div>
+
+                <footer class="composer" id="composer">
+                    <div class="msg-reply-bar" id="msgReplyBar" hidden></div>
+                    <button class="icon-btn attach-btn" id="attachBtn" title="发送文件"><i class="ic ic-clip"></i></button>
+                    <input type="file" id="fileInput" multiple hidden>
+                    <div class="input-wrap">
+                        <textarea id="msgInput" rows="1" placeholder="输入消息…"></textarea>
+                    </div>
+                    <button class="send-fab" id="sendBtn" title="发送"><i class="ic ic-send"></i></button>
+                </footer>
+            </div>
+        </section>
+    </div>
+
+    <!-- 通用弹层：新建群组/频道、加入、编辑资料等 -->
+    <div class="modal-mask" id="modalMask" hidden>
+        <div class="modal" id="modal">
+            <div class="modal-title" id="modalTitle"></div>
+            <button class="modal-x" id="modalCloseX" type="button" aria-label="关闭" hidden><i class="ic ic-close"></i></button>
+            <div class="modal-body" id="modalBody"></div>
+            <div class="modal-foot">
+                <button class="btn-primary" id="modalOk">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 顶部 toast -->
+    <div class="toast-wrap" id="toastWrap"></div>
+
+    <!-- 粒子画布（删除消息特效） -->
+    <canvas id="fxCanvas" class="fx-canvas"></canvas>
+
+    <!-- defer：并行下载、按序执行，不再阻塞页面解析；echarts 已改为点开群/频道预览卡时才懒加载（见 app.js loadEcharts） -->
+    <script defer src="https://cdn.bootcdn.net/ajax/libs/socket.io/4.1.3/socket.io.min.js"></script>
+    <script defer src="{{ url_for('static', filename='js/sfx.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/particles.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

@@ -25,12 +25,13 @@ class Channel(db.Model):
 
     id = db.Column(db.Integer, primary_key=True, comment='频道ID',autoincrement=True)
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='创建者')
-    number = db.Column(db.String(10),nullable=False,unique=True,comment="频道号码")
+    number = db.Column(db.String(20),nullable=False,unique=True,comment="频道号码")
     name = db.Column(db.String(64), nullable=False, comment='频道名称')
     description = db.Column(db.String(200), default=None, comment='频道描述')
     avatar = db.Column(db.String(500), default=None, comment='频道图标')
     is_public = db.Column(db.SmallInteger, default=1, comment='1=公开 0=私有')
     status = db.Column(db.SmallInteger, default=1, comment='1=正常 0=封禁')
+    default_vice_owner = db.Column(db.SmallInteger, default=1, comment='1=新加入成员默认副频道主 0=默认订阅者')
     created_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), comment='创建时间')
 
     owner = db.relationship('User', foreign_keys=[owner_id])
@@ -77,7 +78,7 @@ class ChannelPost(db.Model):
     created_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), comment='发布时间')
 
     channel = db.relationship('Channel', back_populates='posts')
-    channel_files = db.relationship('ChannelFile', back_populates='posts',lazy='joined')
+    channel_files = db.relationship('ChannelFile', back_populates='posts', lazy='joined', order_by='ChannelFile.id')
     comments = db.relationship('ChannelComment', back_populates='post', lazy='dynamic')
     likes = db.relationship('ChannelLike', back_populates='post', lazy='dynamic')
 
@@ -93,6 +94,8 @@ class ChannelComment(db.Model):
     post_id = db.Column(db.Integer, db.ForeignKey('channel_posts.id'), nullable=False, comment='帖子ID')
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='评论者')
     content = db.Column(db.String(500), nullable=False, comment='评论内容')
+    reply_to = db.Column(db.Integer, default=None, comment='回复的评论ID（为空则为直接评论帖子）')
+    deleted_at = db.Column(db.DateTime, default=None, comment='软删除标记')
     created_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), comment='评论时间')
 
     post = db.relationship('ChannelPost', back_populates='comments')
@@ -142,3 +145,35 @@ class ChannelAnnouncement(db.Model):
 
     def __repr__(self):
         return f"<ChannelAnnouncement {self.id} channel={self.channel_id} title={self.title}>"
+
+
+class ChannelInvite(db.Model):
+    """频道邀请表：频道主/副频道主邀请用户订阅，需被邀请人确认后正式加入"""
+    __tablename__ = 'channel_invites'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True, comment='邀请编号')
+    channel_id = db.Column(db.Integer, db.ForeignKey('channels.id'), nullable=False, comment='频道ID')
+    inviter_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='邀请人ID')
+    invitee_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='被邀请人ID')
+    status = db.Column(db.SmallInteger, default=0, comment='0=待处理 1=已同意 2=已拒绝')
+    created_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), comment='发起时间')
+    handled_at = db.Column(db.DateTime, default=None, comment='处理时间')
+
+    def __repr__(self):
+        return f"<ChannelInvite c={self.channel_id} u={self.invitee_id} status={self.status}>"
+
+
+class ChannelAnnouncementUserIsRead(db.Model):
+    """频道公告用户已读表：点“我已知晓”后插入记录，最新未读公告查询用"""
+    __tablename__ = 'channel_announcement_user_is_read'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, comment='用户ID')
+    channel_id = db.Column(db.Integer, db.ForeignKey('channels.id'), nullable=False, comment='频道ID')
+    announcement_id = db.Column(db.Integer, db.ForeignKey('channel_announcements.id'), nullable=False, comment='公告ID')
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'announcement_id', name='uk_channel_announcement_read'),
+    )
+
+    def __repr__(self):
+        return f"<ChannelAnnouncementUserIsRead c={self.channel_id} u={self.user_id}>"
