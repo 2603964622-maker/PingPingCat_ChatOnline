@@ -74,6 +74,7 @@ ChatOnline 是一个基于 **Flask + Flask-SocketIO** 构建的全功能即时�
 - GitHub 仓库管理，master 分支
 
 ## 四、项目结构
+```
 ChatOnline/
 ├── app.py               # 应用入口，注册蓝图 / SocketIO/CLI 命令
 ├── config.py            # Development/Production 多环境配置
@@ -90,7 +91,7 @@ ChatOnline/
 ├── migrations/          # Alembic 迁移版本
 ├── templates/           # Jinja2 页面模板
 └── static/              # CSS / JS / SVG / 图标资源
-
+```
 ## 五、架构特点
 - **模块化蓝图设计**：每个业务域独立 blueprint，路由、模型、SocketIO 事件三层分离
 - **实时 + 轮询混合**：核心消息走 WebSocket，列表/统计走 AJAX + Redis 缓存
