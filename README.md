@@ -74,22 +74,22 @@ ChatOnline 是一个基于 **Flask + Flask-SocketIO** 构建的全功能即时�
 - GitHub 仓库管理，master 分支
 
 ## 四、项目结构
-ChatOnline/ 
-├── app.py # 应用入口，注册蓝图/SocketIO/CLI命令
-├── config.py # Development/Production 多环境配置
-├── exts.py # db/migrate/mail/cache/socketio 扩展实例
-├── decorators.py # 登录校验等装饰器
-├── hooks.py # before_request 全局钩子 
-├── presence.py # 在线状态管理 
+ChatOnline/
+├── app.py               # 应用入口，注册蓝图 / SocketIO/CLI 命令
+├── config.py            # Development/Production 多环境配置
+├── exts.py              # db/migrate/mail/cache/socketio 扩展实例
+├── decorators.py        # 登录校验等装饰器
+├── hooks.py             # before_request 全局钩子
+├── presence.py          # 在线状态管理
 ├── chatonline_celery.py # Celery 工厂
-├── commands.py # 幂等 CLI 初始化命令
-├── blueprints/ # 14 个业务蓝图（用户/私聊/群聊/频道/Bot/管理后台…）
-├── chat/ # SocketIO 事件处理器（private/groups/channels） 
-├── bots/ # AI Bot 引擎、规则、时间窗口
-├── models/ # SQLAlchemy 数据模型（15 个模块）
-├── migrations/ # Alembic 迁移版本
-├── templates/ # Jinja2 页面模板
-└── static/ # CSS / JS / SVG / 图标资源
+├── commands.py          # 幂等 CLI 初始化命令
+├── blueprints/          # 14 个业务蓝图（用户 / 私聊 / 群聊 / 频道 / Bot / 管理后台...）
+├── chat/                # SocketIO 事件处理器（private/groups/channels）
+├── bots/                # AI Bot 引擎、规则、时间窗口
+├── models/              # SQLAlchemy 数据模型（15 个模块）
+├── migrations/          # Alembic 迁移版本
+├── templates/           # Jinja2 页面模板
+└── static/              # CSS / JS / SVG / 图标资源
 
 ## 五、架构特点
 - **模块化蓝图设计**：每个业务域独立 blueprint，路由、模型、SocketIO 事件三层分离
